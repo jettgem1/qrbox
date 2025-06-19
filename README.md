@@ -1,41 +1,153 @@
-# AI SDK Python Streaming Preview
+# QRBox - Smart Moving Inventory with QR Codes
 
-This template demonstrates the usage of [Data Stream Protocol](https://sdk.vercel.ai/docs/ai-sdk-ui/stream-protocol#data-stream-protocol) to stream chat completions from a Python endpoint ([FastAPI](https://fastapi.tiangolo.com)) and display them using the [useChat](https://sdk.vercel.ai/docs/ai-sdk-ui/chatbot#chatbot) hook in your Next.js application.
+A modern web application to organize moving boxes using QR codes. Track items, manage moving waves, and never lose track of your belongings again.
 
-## Deploy your own
+**🌐 Live Demo: [https://qrbox-mu.vercel.app/](https://qrbox-mu.vercel.app/)**
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel-labs%2Fai-sdk-preview-python-streaming&env=OPENAI_API_KEY&envDescription=API%20keys%20needed%20for%20application&envLink=https%3A%2F%2Fgithub.com%2Fvercel-labs%2Fai-sdk-preview-python-streaming%2Fblob%2Fmain%2F.env.example)
+## Features
 
-## How to use
+- 📦 **Box Management**: Create and organize boxes by waves (Wave 1, 2, 3, Storage)
+- 🏷️ **Item Tracking**: Add, edit, and delete items within each box
+- 📱 **QR Code Generation**: Generate QR codes linking directly to box details
+- 🔍 **Smart Search**: Search across boxes and items with real-time filtering
+- 📱 **Mobile Friendly**: Responsive design that works on all devices
+- 🎨 **Visual Organization**: Use emojis and categories to organize your boxes
 
-Run [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app) with [npm](https://docs.npmjs.com/cli/init), [Yarn](https://yarnpkg.com/lang/en/docs/cli/create/), or [pnpm](https://pnpm.io) to bootstrap the example:
+## Tech Stack
+
+- **Frontend**: Next.js 13 (App Router), TypeScript, Tailwind CSS
+- **Backend**: Firebase Firestore (NoSQL database)
+- **QR Codes**: qrcode.react for client-side generation
+- **Deployment**: Vercel (frontend), Firebase (backend)
+
+## Quick Start
+
+### 1. Clone the repository
 
 ```bash
-npx create-next-app --example https://github.com/vercel-labs/ai-sdk-preview-python-streaming ai-sdk-preview-python-streaming-example
+git clone <repository-url>
+cd qrbox
 ```
+
+### 2. Install dependencies
 
 ```bash
-yarn create next-app --example https://github.com/vercel-labs/ai-sdk-preview-python-streaming ai-sdk-preview-python-streaming-example
+npm install
 ```
+
+### 3. Set up Firebase
+
+1. Create a new Firebase project at [Firebase Console](https://console.firebase.google.com/)
+2. Enable Firestore Database
+3. Get your Firebase configuration from Project Settings > General > Your apps
+4. Create a `.env.local` file with your Firebase config:
+
+```env
+NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key_here
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id_here
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
+```
+
+### 4. Run the development server
 
 ```bash
-pnpm create next-app --example https://github.com/vercel-labs/ai-sdk-preview-python-streaming ai-sdk-preview-python-streaming-example
+npm run dev
 ```
 
-To run the example locally you need to:
+Open [http://localhost:3000](http://localhost:3000) to see the application.
 
-1. Sign up for accounts with the AI providers you want to use (e.g., OpenAI, Anthropic).
-2. Obtain API keys for each provider.
-3. Set the required environment variables as shown in the `.env.example` file, but in a new file called `.env`.
-4. `pnpm install` to install the required Node dependencies.
-5. `virtualenv venv` to create a virtual environment.
-6. `source venv/bin/activate` to activate the virtual environment.
-7. `pip install -r requirements.txt` to install the required Python dependencies.
-8. `pnpm dev` to launch the development server.
+## Usage
 
-## Learn More
+### Creating Boxes
 
-To learn more about the AI SDK or Next.js by Vercel, take a look at the following resources:
+1. Click "Add Box" on the dashboard
+2. Fill in the required information:
+   - **Box Number**: Automatically suggested
+   - **Group**: Choose from Wave 1, 2, 3, or Storage
+   - **Category**: e.g., Kitchen, Bedroom, Office
+   - **Summary**: Brief description of contents
+   - **Visual Identifiers**: Choose one or more emojis for visual identification
+   - **Location**: Where the box is stored
+   - **Notes**: Additional information
 
-- [AI SDK Documentation](https://sdk.vercel.ai/docs)
-- [Next.js Documentation](https://nextjs.org/docs)
+### Managing Items
+
+1. Click "View" on any box to see its details
+2. Click "Add Item" to add items to the box
+3. Edit or delete items using the inline controls
+
+### QR Codes
+
+1. Click "QR" on any box card or "QR Code" on the box detail page
+2. The QR code links directly to the box's detail page at `https://qrbox-mu.vercel.app/box/[id]`
+3. Download the QR code as a PNG image
+4. Print and attach to your physical boxes
+
+### Search and Filter
+
+- Use the search bar to find boxes or items by name
+- Filter boxes by group using the dropdown
+- Search works across box summaries, categories, notes, and item names
+
+## Data Model
+
+### Box Collection
+```typescript
+{
+  id: string;           // Auto-generated
+  boxNumber: number;    // Human-readable ID
+  group: string;         // "Wave 1", "Wave 2", "Wave 3", "Storage"
+  category: string;     // "Kitchen", "Bedroom", etc.
+  summary: string;      // Short description
+  colorCode: string;    // Space-separated emojis for visual identification
+  location: string;     // Storage location
+  notes: string;        // Additional notes
+  createdAt: Timestamp; // Creation date
+}
+```
+
+### Items Subcollection (boxes/{boxId}/items)
+```typescript
+{
+  id: string;           // Auto-generated
+  name: string;         // Item name
+  notes?: string;       // Optional notes
+  createdAt: Timestamp; // Creation date
+}
+```
+
+## Deployment
+
+### Frontend (Vercel)
+
+1. Push your code to GitHub
+2. Connect your repository to Vercel
+3. Add your environment variables in Vercel dashboard
+4. Update `NEXT_PUBLIC_BASE_URL` to your Vercel domain
+5. Deploy!
+
+### Backend (Firebase)
+
+1. Install Firebase CLI: `npm install -g firebase-tools`
+2. Login: `firebase login`
+3. Initialize: `firebase init`
+4. Deploy: `firebase deploy`
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+## License
+
+MIT License - see LICENSE file for details.
+
+## Support
+
+If you have any questions or need help, please open an issue on GitHub.
