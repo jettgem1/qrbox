@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import PhotoCapture from '@/components/photo-capture';
 import MoveItem from '@/components/move-item';
 import BoxPhotoUpload from '@/components/box-photo-upload';
+import { useAuth } from '@/lib/auth-context';
 import { toast } from 'sonner';
 
 interface AnalyzedItem {
@@ -35,6 +36,7 @@ export default function BoxDetail() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { user } = useAuth();
   const boxId = params.id as string;
   const showQR = searchParams.get('qr') === 'true';
 
@@ -76,10 +78,11 @@ export default function BoxDetail() {
   };
 
   const handleAddItem = async () => {
-    if (!newItemName.trim()) return;
+    if (!newItemName.trim() || !user) return;
 
     try {
       await createItem(boxId, {
+        userId: user.uid,
         name: newItemName.trim(),
         notes: newItemNotes.trim() || undefined,
         category: newItemCategory.trim() || undefined
@@ -156,10 +159,13 @@ export default function BoxDetail() {
   };
 
   const handleItemsAnalyzed = async (analyzedItems: AnalyzedItem[]) => {
+    if (!user) return;
+
     try {
       // Add all analyzed items to the box
       for (const item of analyzedItems) {
         await createItem(boxId, {
+          userId: user.uid,
           name: item.name,
           notes: item.description,
           category: item.category,
