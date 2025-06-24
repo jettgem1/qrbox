@@ -5,6 +5,65 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Rate limiting: track requests per minute
+const requestCounts = new Map<string, { count: number; resetTime: number }>();
+const MAX_REQUESTS_PER_MINUTE = 10; // Conservative limit to stay well under OpenAI's limits
+
+// Helper function to check rate limit
+function checkRateLimit(): { allowed: boolean; waitTime?: number } {
+  const now = Date.now();
+  const minuteKey = Math.floor(now / 60000); // Round to minute
+
+  const current = requestCounts.get(minuteKey.toString()) || { count: 0, resetTime: now + 60000 };
+
+  if (current.count >= MAX_REQUESTS_PER_MINUTE) {
+    const waitTime = current.resetTime - now;
+    return { allowed: false, waitTime: Math.max(0, waitTime) };
+  }
+
+  requestCounts.set(minuteKey.toString(), {
+    count: current.count + 1,
+    resetTime: current.resetTime
+  });
+
+  return { allowed: true };
+}
+
+// Helper function to sleep
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Retry function with exponential backoff
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000
+): Promise<T> {
+  let lastError: Error;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+
+      // If it's a rate limit error, wait longer
+      if (error instanceof Error && error.message.includes('429')) {
+        const waitTime = baseDelay * Math.pow(2, attempt) + Math.random() * 1000;
+        console.log(`Rate limit hit, waiting ${waitTime}ms before retry ${attempt + 1}/${maxRetries + 1}`);
+        await sleep(waitTime);
+        continue;
+      }
+
+      // For other errors, don't retry
+      throw error;
+    }
+  }
+
+  throw lastError!;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { imageBase64, boxContext } = await request.json();
@@ -17,6 +76,16 @@ export async function POST(request: NextRequest) {
     if (!process.env.OPENAI_API_KEY) {
       console.error('OpenAI API key not configured');
       return NextResponse.json({ error: 'AI service not configured' }, { status: 500 });
+    }
+
+    // Check rate limit
+    const rateLimitCheck = checkRateLimit();
+    if (!rateLimitCheck.allowed) {
+      console.log(`Rate limit exceeded, need to wait ${rateLimitCheck.waitTime}ms`);
+      return NextResponse.json({
+        error: 'Rate limit exceeded',
+        retryAfter: rateLimitCheck.waitTime
+      }, { status: 429 });
     }
 
     // Remove the data:image/jpeg;base64, prefix if present
@@ -59,27 +128,30 @@ Examples:
 
     console.log('Sending request to OpenAI...');
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: prompt,
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:image/jpeg;base64,${base64Data}`,
+    // Use retry logic for the OpenAI API call
+    const response = await retryWithBackoff(async () => {
+      return await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: prompt,
               },
-            },
-          ],
-        },
-      ],
-      max_tokens: 1000,
-      response_format: { type: "json_object" },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/jpeg;base64,${base64Data}`,
+                },
+              },
+            ],
+          },
+        ],
+        max_tokens: 1000,
+        response_format: { type: "json_object" },
+      });
     });
 
     console.log('OpenAI response received');

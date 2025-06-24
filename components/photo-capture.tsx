@@ -346,6 +346,12 @@ export default function PhotoCapture({ onItemsAnalyzed, onClose, boxContext }: P
 
         try {
           console.log('Sending photo for analysis...');
+
+          // Add delay between requests to prevent rate limiting
+          if (pendingItems.indexOf(queuedPhoto) > 0) {
+            await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay between requests
+          }
+
           const response = await fetch('/api/analyze-photo', {
             method: 'POST',
             headers: {
@@ -358,23 +364,70 @@ export default function PhotoCapture({ onItemsAnalyzed, onClose, boxContext }: P
           });
 
           console.log('Analysis response status:', response.status);
-          const data = await response.json();
-          console.log('Analysis response data:', data);
 
-          if (response.ok && data.items && data.items.length > 0) {
-            const result = data.items[0]; // Take first item since we're processing individual photos
-            console.log('Analysis successful:', result);
-            setPhotoQueue(prev => prev.map(p =>
-              p.id === queuedPhoto.id ? {
-                ...p,
-                status: 'completed',
-                result: { ...result, photo: queuedPhoto.photo }
-              } : p
-            ));
-            toast.success(`Analyzed: ${result.name}`);
+          if (response.status === 429) {
+            // Rate limit hit - get retry time and wait
+            const errorData = await response.json();
+            const retryAfter = errorData.retryAfter || 60000; // Default to 1 minute
+
+            console.log(`Rate limit hit, waiting ${retryAfter}ms before retry`);
+            toast.info(`Rate limit reached. Waiting ${Math.round(retryAfter / 1000)} seconds before retry...`);
+
+            // Wait for the specified time
+            await new Promise(resolve => setTimeout(resolve, retryAfter));
+
+            // Retry the same request
+            const retryResponse = await fetch('/api/analyze-photo', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                imageBase64: queuedPhoto.photo,
+                boxContext: boxContext,
+              }),
+            });
+
+            if (!retryResponse.ok) {
+              throw new Error(`Retry failed with status ${retryResponse.status}`);
+            }
+
+            const data = await retryResponse.json();
+            console.log('Retry successful:', data);
+
+            if (data.items && data.items.length > 0) {
+              const result = data.items[0];
+              console.log('Analysis successful after retry:', result);
+              setPhotoQueue(prev => prev.map(p =>
+                p.id === queuedPhoto.id ? {
+                  ...p,
+                  status: 'completed',
+                  result: { ...result, photo: queuedPhoto.photo }
+                } : p
+              ));
+              toast.success(`Analyzed: ${result.name}`);
+            } else {
+              throw new Error(data.error || 'Analysis failed after retry');
+            }
           } else {
-            console.error('Analysis failed:', data);
-            throw new Error(data.error || data.details || 'Analysis failed');
+            const data = await response.json();
+            console.log('Analysis response data:', data);
+
+            if (response.ok && data.items && data.items.length > 0) {
+              const result = data.items[0]; // Take first item since we're processing individual photos
+              console.log('Analysis successful:', result);
+              setPhotoQueue(prev => prev.map(p =>
+                p.id === queuedPhoto.id ? {
+                  ...p,
+                  status: 'completed',
+                  result: { ...result, photo: queuedPhoto.photo }
+                } : p
+              ));
+              toast.success(`Analyzed: ${result.name}`);
+            } else {
+              console.error('Analysis failed:', data);
+              throw new Error(data.error || data.details || 'Analysis failed');
+            }
           }
         } catch (error) {
           console.error('Error analyzing photo:', error);
@@ -605,14 +658,14 @@ export default function PhotoCapture({ onItemsAnalyzed, onClose, boxContext }: P
           <canvas ref={canvasRef} className="hidden" />
         </div>
 
-        {/* Top right exit button */}
-        <div className="absolute top-4 right-4 z-20">
+        {/* Bottom left exit button */}
+        <div className="absolute bottom-4 left-4 z-20">
           <Button
             variant="outline"
             size="sm"
             onClick={() => {
               cleanupCamera();
-              onClose();
+              setShowResults(true);
             }}
             className="bg-black bg-opacity-50 border-white text-white hover:bg-black hover:bg-opacity-70 h-10 w-10 rounded-full p-0"
           >
