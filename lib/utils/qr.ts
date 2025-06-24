@@ -42,8 +42,7 @@ export const getGroupColorLight = (group: string) => {
 };
 
 export const generateBoxUrl = (boxId: string) => {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://qrbox-mu.vercel.app';
-  return `${baseUrl}/box/${boxId}`;
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://allmyitems.com';  return `${baseUrl}/box/${boxId}`;
 };
 
 export const downloadQRCode = async (elementRef: HTMLElement, filename: string) => {

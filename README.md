@@ -1,8 +1,8 @@
-# QRBox - Smart Moving Inventory with QR Codes
+# All Your Items - Smart Moving Inventory with QR Codes
 
 A modern web application to organize moving boxes using QR codes. Track items, manage moving waves, and never lose track of your belongings again.
 
-**🌐 Live Demo: [https://qrbox-mu.vercel.app/](https://qrbox-mu.vercel.app/)**
+**🌐 Live Demo: [https://allmyitems.com/](https://allmyitems.com/)**
 
 ## Features
 
@@ -26,7 +26,7 @@ A modern web application to organize moving boxes using QR codes. Track items, m
 
 ```bash
 git clone <repository-url>
-cd qrbox
+cd allyouritems
 ```
 
 ### 2. Install dependencies
@@ -83,7 +83,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the application.
 ### QR Codes
 
 1. Click "QR" on any box card or "QR Code" on the box detail page
-2. The QR code links directly to the box's detail page at `https://qrbox-mu.vercel.app/box/[id]`
+2. The QR code links directly to the box's detail page at `https://allmyitems.com/box/[id]`
 3. Download the QR code as a PNG image
 4. Print and attach to your physical boxes
 

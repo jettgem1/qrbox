@@ -1,14 +1,14 @@
-# QRBox Setup Guide
+# All Your Items Setup Guide
 
 ## Firebase Configuration
 
-To get QRBox working, you need to set up Firebase Firestore:
+To get All Your Items working, you need to set up Firebase Firestore:
 
 ### 1. Create a Firebase Project
 
 1. Go to [Firebase Console](https://console.firebase.google.com/)
 2. Click "Create a project" or "Add project"
-3. Enter a project name (e.g., "qrbox-inventory")
+3. Enter a project name (e.g., "allyouritems-inventory")
 4. Follow the setup wizard (you can disable Google Analytics if you don't need it)
 
 ### 2. Enable Firestore Database
@@ -24,7 +24,7 @@ To get QRBox working, you need to set up Firebase Firestore:
 1. In Firebase Console, go to Project Settings (gear icon)
 2. Scroll down to "Your apps" section
 3. Click the web icon (</>) to add a web app
-4. Register your app with a nickname (e.g., "QRBox Web")
+4. Register your app with a nickname (e.g., "All Your Items Web")
 5. Copy the config object that looks like this:
 
 ```javascript
@@ -100,7 +100,7 @@ For production, you'll want more restrictive rules based on user authentication.
 1. Push your code to GitHub
 2. Connect your repository to Vercel
 3. Add your environment variables in Vercel dashboard
-4. Update `NEXT_PUBLIC_BASE_URL` to your Vercel domain (e.g., `https://qrbox-mu.vercel.app`)
+4. Update `NEXT_PUBLIC_BASE_URL` to your Vercel domain (e.g., `https://allmyitems.com`)
 5. Deploy!
 
 ### Firebase Hosting (Optional)
@@ -117,7 +117,7 @@ firebase deploy
 ## QR Code URLs
 
 - **Development**: QR codes will link to `http://localhost:3000/box/[id]` (won't work on mobile)
-- **Production**: QR codes will link to `https://qrbox-mu.vercel.app/box/[id]` (works everywhere)
+- **Production**: QR codes will link to `https://allmyitems.com/box/[id]` (works everywhere)
 
 For local testing of QR codes, consider using ngrok:
 ```bash
