@@ -34,6 +34,7 @@ export default function PhotoCapture({ onItemsAnalyzed, onClose, boxContext }: P
   const [showResults, setShowResults] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isCameraLoading, setIsCameraLoading] = useState(false);
+  const [isFrontCamera, setIsFrontCamera] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -143,6 +144,16 @@ export default function PhotoCapture({ onItemsAnalyzed, onClose, boxContext }: P
       }
 
       streamRef.current = stream;
+
+      // Detect if this is a front-facing camera
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        const settings = videoTrack.getSettings();
+        const facingMode = settings.facingMode;
+        const isFront = facingMode === 'user' || facingMode === 'front';
+        setIsFrontCamera(isFront);
+        console.log('Camera facing mode:', facingMode, 'Is front camera:', isFront);
+      }
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -422,6 +433,15 @@ export default function PhotoCapture({ onItemsAnalyzed, onClose, boxContext }: P
     setMode('select');
   };
 
+  // Cleanup camera when leaving camera mode
+  const cleanupCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setIsFrontCamera(false);
+  };
+
   // Show results if we have completed items AND user has explicitly finished
   if (showResults && photoQueue.length > 0 && photoQueue.some(item => item.status === 'completed')) {
     const completedItems = photoQueue.filter(item => item.status === 'completed' && item.result);
@@ -537,12 +557,13 @@ export default function PhotoCapture({ onItemsAnalyzed, onClose, boxContext }: P
   if (mode === 'camera') {
     return (
       <div className="fixed inset-0 bg-black flex flex-col z-50">
+        {/* Full screen video container */}
         <div className="flex-1 relative">
           {isCameraLoading && (
             <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-75 z-10">
               <div className="text-center text-white p-4">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
-                <p className="text-sm">Initializing camera...</p>
+                <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin mx-auto mb-2" />
+                <p className="text-sm sm:text-base">Initializing camera...</p>
               </div>
             </div>
           )}
@@ -550,8 +571,8 @@ export default function PhotoCapture({ onItemsAnalyzed, onClose, boxContext }: P
           {cameraError && (
             <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-75 z-10">
               <div className="text-center text-white p-4 max-w-xs mx-4">
-                <X className="h-8 w-8 mx-auto mb-2 text-red-400" />
-                <p className="mb-4 text-sm">{cameraError}</p>
+                <X className="h-6 w-6 sm:h-8 sm:w-8 mx-auto mb-2 text-red-400" />
+                <p className="mb-4 text-sm sm:text-base">{cameraError}</p>
                 <Button onClick={initializeCamera} variant="outline" className="text-white border-white text-sm">
                   Try Again
                 </Button>
@@ -562,8 +583,8 @@ export default function PhotoCapture({ onItemsAnalyzed, onClose, boxContext }: P
           {!streamRef.current && !isCameraLoading && !cameraError && (
             <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-75 z-10">
               <div className="text-center text-white p-4 max-w-xs mx-4">
-                <Camera className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                <p className="mb-4 text-sm">Camera access required to take photos</p>
+                <Camera className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-4 text-gray-300" />
+                <p className="mb-4 text-sm sm:text-base">Camera access required to take photos</p>
                 <Button onClick={initializeCamera} className="bg-blue-600 hover:bg-blue-700 text-sm">
                   Start Camera
                 </Button>
@@ -577,31 +598,37 @@ export default function PhotoCapture({ onItemsAnalyzed, onClose, boxContext }: P
             playsInline
             muted
             autoPlay
-            style={{ transform: 'scaleX(-1)' }} // Mirror the video for better UX
+            style={{ transform: isFrontCamera ? 'scaleX(-1)' : 'none' }}
           />
 
           {/* Hidden canvas for capturing photos */}
           <canvas ref={canvasRef} className="hidden" />
         </div>
 
-        <div className="bg-white p-3 sm:p-4">
-          <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <h3 className="text-base sm:text-lg font-semibold">Take Photo of Item</h3>
-            <Button variant="outline" size="sm" onClick={() => setShowResults(true)} className="text-sm">
-              Done
-            </Button>
-          </div>
+        {/* Top right exit button */}
+        <div className="absolute top-4 right-4 z-20">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              cleanupCamera();
+              onClose();
+            }}
+            className="bg-black bg-opacity-50 border-white text-white hover:bg-black hover:bg-opacity-70 h-10 w-10 rounded-full p-0"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
 
-          <div className="flex gap-2 sm:gap-3">
-            <Button
-              onClick={capturePhoto}
-              className="flex-1 py-2 sm:py-3 text-sm"
-              disabled={isCameraLoading || !!cameraError || !streamRef.current}
-            >
-              <Camera className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
-              Capture Item
-            </Button>
-          </div>
+        {/* Bottom center capture button */}
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20">
+          <Button
+            onClick={capturePhoto}
+            className="h-14 w-14 sm:h-16 sm:w-16 rounded-full bg-white hover:bg-gray-100 p-0 border-4 border-gray-300"
+            disabled={isCameraLoading || !!cameraError || !streamRef.current}
+          >
+            <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-white border-2 border-gray-400" />
+          </Button>
         </div>
       </div>
     );
@@ -614,7 +641,7 @@ export default function PhotoCapture({ onItemsAnalyzed, onClose, boxContext }: P
           <div className="p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-base sm:text-lg font-semibold">Upload Item Photo</h3>
-              <Button variant="outline" size="sm" onClick={() => setShowResults(true)} className="text-sm">
+              <Button variant="outline" size="sm" onClick={onClose} className="text-sm">
                 Done
               </Button>
             </div>

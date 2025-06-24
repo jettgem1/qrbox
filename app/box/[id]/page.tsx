@@ -16,7 +16,7 @@ import {
   Camera,
   ArrowRight
 } from 'lucide-react';
-import { getBox, getItems, createItem, updateItem, deleteItem, deleteBox, moveItem, Box, Item, updateBox } from '@/lib/firestore';
+import { getBox, getItems, createItem, updateItem, deleteItem, deleteBox, moveItem, Box, Item, updateBox, getAllCategoriesWithPresets, createCategory, Category } from '@/lib/firestore';
 import { generateBoxUrl, downloadQRCode, getGroupColor, getGroupColorLight } from '@/lib/utils/qr';
 import { Button } from '@/components/ui/button';
 import PhotoCapture from '@/components/photo-capture';
@@ -55,12 +55,18 @@ export default function BoxDetail() {
   const [showMoveItem, setShowMoveItem] = useState(false);
   const [showBoxPhotoUpload, setShowBoxPhotoUpload] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
 
   const qrRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadBoxData();
-  }, [boxId]);
+    if (user) {
+      loadCategories();
+    }
+  }, [boxId, user]);
 
   const loadBoxData = async () => {
     try {
@@ -74,6 +80,40 @@ export default function BoxDetail() {
       console.error('Error loading box data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCategories = async () => {
+    if (!user) return;
+
+    try {
+      const fetchedCategories = await getAllCategoriesWithPresets(user.uid);
+      setCategories(fetchedCategories);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+    }
+  };
+
+  const handleCreateCategory = async () => {
+    if (!user) return;
+
+    if (!newCategoryName.trim()) {
+      toast.error('Please enter a category name');
+      return;
+    }
+
+    try {
+      const newCategory = await createCategory(newCategoryName.trim(), user.uid);
+      if (newCategory.id) {
+        setCategories(prev => [...prev, newCategory as Category & { id: string }]);
+        setNewItemCategory(newCategory.name);
+        setNewCategoryName('');
+        setShowNewCategoryInput(false);
+        toast.success('Category created successfully');
+      }
+    } catch (error) {
+      console.error('Error creating category:', error);
+      toast.error('Failed to create category');
     }
   };
 
@@ -439,13 +479,60 @@ export default function BoxDetail() {
                   <label className="block text-sm font-medium text-box-700 mb-1">
                     Category
                   </label>
-                  <input
-                    type="text"
-                    value={newItemCategory}
-                    onChange={(e) => setNewItemCategory(e.target.value)}
-                    className="w-full px-3 py-2 border border-box-300 rounded-lg focus:ring-2 focus:ring-box-500 focus:border-transparent bg-white"
-                    placeholder="e.g., Kitchen, Electronics"
-                  />
+                  <div className="space-y-1">
+                    {!showNewCategoryInput ? (
+                      <div className="flex gap-2">
+                        <select
+                          value={newItemCategory}
+                          onChange={(e) => setNewItemCategory(e.target.value)}
+                          className="flex-1 px-3 py-2 border border-box-300 rounded-lg focus:ring-2 focus:ring-box-500 focus:border-transparent bg-white"
+                        >
+                          <option value="">Select category</option>
+                          {categories.map(category => (
+                            <option key={category.id} value={category.name}>
+                              {category.name} {category.isPreset ? '(Preset)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setShowNewCategoryInput(true)}
+                          className="px-3 py-2 border-box-300 text-box-700 hover:bg-box-50"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newCategoryName}
+                          onChange={(e) => setNewCategoryName(e.target.value)}
+                          placeholder="New category name"
+                          className="flex-1 px-3 py-2 border border-box-300 rounded-lg focus:ring-2 focus:ring-box-500 focus:border-transparent bg-white"
+                        />
+                        <Button
+                          type="button"
+                          onClick={handleCreateCategory}
+                          className="px-3 py-2 bg-box-600 hover:bg-box-700"
+                        >
+                          ✓
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            setShowNewCategoryInput(false);
+                            setNewCategoryName('');
+                          }}
+                          className="px-3 py-2 border-box-300 text-box-700 hover:bg-box-50"
+                        >
+                          ✕
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-box-700 mb-1">
@@ -485,13 +572,18 @@ export default function BoxDetail() {
                       onChange={(e) => setEditingItemName(e.target.value)}
                       className="px-3 py-2 border border-box-300 rounded-lg focus:ring-2 focus:ring-box-500 focus:border-transparent bg-white"
                     />
-                    <input
-                      type="text"
+                    <select
                       value={editingItemCategory}
                       onChange={(e) => setEditingItemCategory(e.target.value)}
                       className="px-3 py-2 border border-box-300 rounded-lg focus:ring-2 focus:ring-box-500 focus:border-transparent bg-white"
-                      placeholder="Category"
-                    />
+                    >
+                      <option value="">Select category</option>
+                      {categories.map(category => (
+                        <option key={category.id} value={category.name}>
+                          {category.name} {category.isPreset ? '(Preset)' : ''}
+                        </option>
+                      ))}
+                    </select>
                     <input
                       type="text"
                       value={editingItemNotes}

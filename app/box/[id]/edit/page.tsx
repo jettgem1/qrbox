@@ -3,43 +3,31 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Save } from 'lucide-react';
-import { getBox, updateBox, Box } from '@/lib/firestore';
+import { ArrowLeft, Save, Plus } from 'lucide-react';
+import { getBox, updateBox, Box, getAllGroups, createGroup, Group, getAllCategoriesWithPresets, createCategory, Category } from '@/lib/firestore';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-
-const WAVES = ['Wave 1', 'Wave 2', 'Wave 3', 'Storage'];
-const EMOJIS = [
-  // Kitchen & Food
-  '🍳', '🍽️', '🥘', '🍴', '🧂', '🍷', '🧀', '🍎',
-  // Bedroom & Clothing
-  '👕', '🛏️', '👗', '👟', '🧥', '🧸', '💄', '🪞',
-  // Office & Work
-  '💻', '📚', '✏️', '📁', '🖨️', '📱', '🎒', '💼',
-  // Bathroom & Personal Care
-  '🧴', '🧼', '🪒', '🧻', '🛁',
-  // Living Room & Entertainment
-  '📺', '🎮', '🎵', '📷', '🎨', '🧩', '🎭', '🎪',
-  // Garage & Tools
-  '🔧', '🔨', '⚡', '🔋', '🚗', '🚲', '🏃',
-  // Storage & Organization
-  '📦', '🗂️', '🗄️', '🧺', '🗑️', '📋',
-  // Seasonal & Special
-  '🎄', '🎃', '🌸', '🏖️', '🍂', '❄️', '🎁', '🎊'
-];
+import { useAuth } from '@/lib/auth-context';
 
 export default function EditBox() {
   const params = useParams();
   const router = useRouter();
   const boxId = params.id as string;
+  const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [box, setBox] = useState<Box | null>(null);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [showNewGroupInput, setShowNewGroupInput] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
 
   const [formData, setFormData] = useState({
     boxNumber: 1,
-    group: 'Wave 1',
+    group: '',
     category: '',
     summary: '',
     colorCode: '📦',
@@ -47,11 +35,83 @@ export default function EditBox() {
     notes: ''
   });
 
-  const [selectedEmojis, setSelectedEmojis] = useState<string[]>(['📦']);
-
   useEffect(() => {
-    loadBox();
-  }, [boxId]);
+    if (user) {
+      loadBox();
+      loadGroups();
+      loadCategories();
+    }
+  }, [boxId, user]);
+
+  const loadCategories = async () => {
+    if (!user) return;
+
+    try {
+      const fetchedCategories = await getAllCategoriesWithPresets(user.uid);
+      setCategories(fetchedCategories);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      toast.error('Failed to load categories');
+    }
+  };
+
+  const handleCreateCategory = async () => {
+    if (!user) return;
+
+    if (!newCategoryName.trim()) {
+      toast.error('Please enter a category name');
+      return;
+    }
+
+    try {
+      const newCategory = await createCategory(newCategoryName.trim(), user.uid);
+      if (newCategory.id) {
+        setCategories(prev => [...prev, newCategory as Category & { id: string }]);
+        setFormData(prev => ({ ...prev, category: newCategory.name }));
+        setNewCategoryName('');
+        setShowNewCategoryInput(false);
+        toast.success('Category created successfully');
+      }
+    } catch (error) {
+      console.error('Error creating category:', error);
+      toast.error('Failed to create category');
+    }
+  };
+
+  const loadGroups = async () => {
+    if (!user) return;
+
+    try {
+      const fetchedGroups = await getAllGroups(user.uid);
+      setGroups(fetchedGroups.filter((group): group is Group & { id: string } => group.id !== undefined));
+    } catch (error) {
+      console.error('Error loading groups:', error);
+      toast.error('Failed to load groups');
+    }
+  };
+
+  const handleCreateGroup = async () => {
+    if (!user) return;
+
+    if (!newGroupName.trim()) {
+      toast.error('Please enter a group name');
+      return;
+    }
+
+    try {
+      const newGroup = await createGroup(newGroupName.trim(), user.uid);
+      if (newGroup.id) {
+        setGroups(prev => [...prev, newGroup as Group & { id: string }]);
+        setFormData(prev => ({ ...prev, group: newGroup.name }));
+        setNewGroupName('');
+        setShowNewGroupInput(false);
+        toast.success('Group created successfully');
+      }
+    } catch (error) {
+      console.error('Error creating group:', error);
+      toast.error('Failed to create group');
+    }
+  };
 
   const loadBox = async () => {
     try {
@@ -67,10 +127,6 @@ export default function EditBox() {
           location: boxData.location || '',
           notes: boxData.notes || ''
         });
-
-        // Parse emojis from colorCode (handle both single and multiple emojis)
-        const emojis = boxData.colorCode ? boxData.colorCode.split(' ').filter(emoji => emoji.trim()) : ['📦'];
-        setSelectedEmojis(emojis);
       }
     } catch (error) {
       console.error('Error loading box:', error);
@@ -95,7 +151,7 @@ export default function EditBox() {
         group: formData.group,
         category: formData.category.trim(),
         summary: formData.summary.trim(),
-        colorCode: selectedEmojis.join(' '), // Store all emojis
+        colorCode: formData.colorCode,
         location: formData.location.trim(),
         notes: formData.notes.trim()
       });
@@ -111,19 +167,6 @@ export default function EditBox() {
 
   const handleInputChange = (field: string, value: string | number) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleEmojiToggle = (emoji: string) => {
-    setSelectedEmojis(prev => {
-      const newEmojis = prev.includes(emoji)
-        ? prev.filter(e => e !== emoji)
-        : [...prev, emoji];
-
-      // Update form data with the first emoji (for backward compatibility)
-      setFormData(prevForm => ({ ...prevForm, colorCode: newEmojis[0] || '📦' }));
-
-      return newEmojis;
-    });
   };
 
   if (loading) {
@@ -190,14 +233,70 @@ export default function EditBox() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Group *
               </label>
-              <input
-                type="text"
-                value={formData.group}
-                onChange={(e) => handleInputChange('group', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="e.g., Wave 1, Wave 2, Storage"
-                required
-              />
+              <div className="space-y-2">
+                {!showNewGroupInput ? (
+                  <>
+                    <select
+                      value={formData.group}
+                      onChange={(e) => handleInputChange('group', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    >
+                      <option value="">Select a group</option>
+                      {groups.map(group => (
+                        <option key={group.id} value={group.name}>
+                          {group.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowNewGroupInput(true)}
+                      className="w-full"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create New Group
+                    </Button>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={newGroupName}
+                      onChange={(e) => setNewGroupName(e.target.value)}
+                      placeholder="Enter new group name"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleCreateGroup();
+                        }
+                      }}
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        onClick={handleCreateGroup}
+                        className="flex-1"
+                      >
+                        Create Group
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setShowNewGroupInput(false);
+                          setNewGroupName('');
+                        }}
+                        className="flex-1"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Category */}
@@ -205,14 +304,70 @@ export default function EditBox() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Category *
               </label>
-              <input
-                type="text"
-                value={formData.category}
-                onChange={(e) => handleInputChange('category', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="e.g., Kitchen, Bedroom, Office"
-                required
-              />
+              <div className="space-y-2">
+                {!showNewCategoryInput ? (
+                  <>
+                    <select
+                      value={formData.category}
+                      onChange={(e) => handleInputChange('category', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    >
+                      <option value="">Select a category</option>
+                      {categories.map(category => (
+                        <option key={category.id} value={category.name}>
+                          {category.name} {category.isPreset ? '(Preset)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowNewCategoryInput(true)}
+                      className="w-full"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create New Category
+                    </Button>
+                  </>
+                ) : (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="Enter new category name"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleCreateCategory();
+                        }
+                      }}
+                    />
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        onClick={handleCreateCategory}
+                        className="flex-1"
+                      >
+                        Create Category
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setShowNewCategoryInput(false);
+                          setNewCategoryName('');
+                        }}
+                        className="flex-1"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Summary */}
@@ -228,47 +383,6 @@ export default function EditBox() {
                 placeholder="Brief description of what's in this box"
                 required
               />
-            </div>
-
-            {/* Visual Identifiers (Emojis) */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Visual Identifiers
-              </label>
-              <p className="text-sm text-gray-500 mb-2">
-                Select one or more emojis to help identify this box. Click to toggle selection.
-              </p>
-              <div className="grid grid-cols-8 gap-2 mb-2">
-                {EMOJIS.map(emoji => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => handleEmojiToggle(emoji)}
-                    className={`p-2 text-xl rounded-lg border-2 transition-colors ${selectedEmojis.includes(emoji)
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-              <input
-                type="text"
-                value={selectedEmojis.join(' ')}
-                onChange={(e) => {
-                  const emojis = e.target.value.split(' ').filter(emoji => emoji.trim());
-                  setSelectedEmojis(emojis);
-                  setFormData(prev => ({ ...prev, colorCode: emojis[0] || '📦' }));
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Or type emojis separated by spaces"
-              />
-              {selectedEmojis.length > 0 && (
-                <p className="text-sm text-gray-500 mt-1">
-                  Selected: {selectedEmojis.join(' ')}
-                </p>
-              )}
             </div>
 
             {/* Location */}

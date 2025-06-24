@@ -66,6 +66,38 @@ export interface Group {
   createdAt: Timestamp;
 }
 
+export interface Category {
+  id?: string;
+  userId: string;
+  name: string;
+  isPreset: boolean;
+  createdAt: Timestamp;
+}
+
+// Preset categories that are available to all users
+const PRESET_CATEGORIES = [
+  'Kitchen',
+  'Bedroom',
+  'Bathroom',
+  'Living Room',
+  'Office',
+  'Garage',
+  'Basement',
+  'Attic',
+  'Storage',
+  'Electronics',
+  'Clothing',
+  'Books',
+  'Tools',
+  'Sports',
+  'Toys',
+  'Seasonal',
+  'Documents',
+  'Art',
+  'Music',
+  'Garden'
+];
+
 export const createBox = async (boxData: Omit<Box, 'id' | 'createdAt'>): Promise<Box> => {
   return retryOperation(async () => {
     const docRef = await addDoc(collection(db, 'boxes'), {
@@ -93,11 +125,14 @@ export const getAllBoxes = async (userId: string): Promise<Box[]> => {
   return retryOperation(async () => {
     const q = query(
       collection(db, 'boxes'),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', userId)
+      // Temporarily removed orderBy to avoid index requirement
+      // orderBy('createdAt', 'desc')
     );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Box[];
+    const boxes = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Box[];
+    // Sort in memory instead
+    return boxes.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
   });
 };
 
@@ -120,11 +155,14 @@ export const getBoxesByGroup = async (group: string, userId: string) => {
     const q = query(
       collection(db, 'boxes'),
       where('userId', '==', userId),
-      where('group', '==', group),
-      orderBy('createdAt', 'desc')
+      where('group', '==', group)
+      // Temporarily removed orderBy to avoid index requirement
+      // orderBy('createdAt', 'desc')
     );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Box[];
+    const boxes = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Box[];
+    // Sort in memory instead
+    return boxes.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
   });
 };
 
@@ -234,12 +272,69 @@ export const getAllGroups = async (userId: string): Promise<Group[]> => {
   return retryOperation(async () => {
     const q = query(
       collection(db, 'groups'),
-      where('userId', '==', userId),
-      orderBy('name', 'asc')
+      where('userId', '==', userId)
+      // Temporarily removed orderBy to avoid index requirement
+      // orderBy('name', 'asc')
     );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Group[];
+    const groups = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Group[];
+    // Sort in memory instead
+    return groups.sort((a, b) => a.name.localeCompare(b.name));
   });
+};
+
+export const createCategory = async (name: string, userId: string): Promise<Category> => {
+  return retryOperation(async () => {
+    const docRef = await addDoc(collection(db, 'categories'), {
+      name,
+      userId,
+      isPreset: false,
+      createdAt: Timestamp.now(),
+    });
+    return { id: docRef.id, name, userId, isPreset: false, createdAt: Timestamp.now() };
+  });
+};
+
+export const getAllCategories = async (userId: string): Promise<Category[]> => {
+  return retryOperation(async () => {
+    const q = query(
+      collection(db, 'categories'),
+      where('userId', '==', userId)
+      // Temporarily removed orderBy to avoid index requirement
+      // orderBy('name', 'asc')
+    );
+    const querySnapshot = await getDocs(q);
+    const categories = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Category[];
+    // Sort in memory instead
+    return categories.sort((a, b) => a.name.localeCompare(b.name));
+  });
+};
+
+export const getPresetCategories = (): string[] => {
+  return [...PRESET_CATEGORIES];
+};
+
+export const getAllCategoriesWithPresets = async (userId: string): Promise<Category[]> => {
+  // Always start with preset categories
+  const presetCategories: Category[] = PRESET_CATEGORIES.map(name => ({
+    id: `preset-${name.toLowerCase().replace(/\s+/g, '-')}`,
+    userId: 'system',
+    name,
+    isPreset: true,
+    createdAt: Timestamp.now()
+  }));
+
+  try {
+    // Try to load user categories
+    const userCategories = await getAllCategories(userId);
+    // Combine preset and user categories
+    const allCategories = [...presetCategories, ...userCategories];
+    return allCategories.sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    // If there's an error loading user categories, just return preset categories
+    console.warn('Error loading user categories, returning preset categories only:', error);
+    return presetCategories.sort((a, b) => a.name.localeCompare(b.name));
+  }
 };
 
 // Auth functions

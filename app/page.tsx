@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Search, Plus, Filter, QrCode, Eye, Package, LogOut } from 'lucide-react';
-import { getAllBoxes, searchBoxes, searchItems, getItems, Box, Item } from '@/lib/firestore';
+import { getAllBoxes, searchBoxes, searchItems, getItems, Box, Item, getAllGroups, Group, createGroup } from '@/lib/firestore';
 import { signOutUser } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { getGroupColor, getGroupColorLight } from '@/lib/utils/qr';
@@ -27,12 +27,28 @@ function Dashboard() {
   const [isSearching, setIsSearching] = useState(false);
   const [showItems, setShowItems] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [showNewGroupInput, setShowNewGroupInput] = useState(false);
 
   useEffect(() => {
     if (user && !authLoading) {
       loadBoxes();
+      loadGroups();
     }
   }, [user, authLoading]);
+
+  const loadGroups = async () => {
+    if (!user) return;
+
+    try {
+      const fetchedGroups = await getAllGroups(user.uid);
+      setGroups(fetchedGroups.filter((group): group is Group & { id: string } => group.id !== undefined));
+    } catch (error) {
+      console.error('Error loading groups:', error);
+      // Don't show error toast for groups as it's not critical
+    }
+  };
 
   const loadAllItems = useCallback(async () => {
     if (!user) return;
@@ -146,7 +162,27 @@ function Dashboard() {
     }
   };
 
-  const groups = ['Group 1', 'Group 2', 'Group 3', 'Storage'];
+  const handleCreateGroup = async () => {
+    if (!user) return;
+
+    if (!newGroupName.trim()) {
+      toast.error('Please enter a group name');
+      return;
+    }
+
+    try {
+      const newGroup = await createGroup(newGroupName.trim(), user.uid);
+      if (newGroup.id) {
+        setGroups(prev => [...prev, newGroup as Group & { id: string }]);
+        setNewGroupName('');
+        setShowNewGroupInput(false);
+        toast.success('Group created successfully');
+      }
+    } catch (error) {
+      console.error('Error creating group:', error);
+      toast.error('Failed to create group');
+    }
+  };
 
   // Show loading while auth is being checked
   if (authLoading) {
@@ -261,16 +297,64 @@ function Dashboard() {
               {/* Group Filter */}
               <div className="flex items-center gap-2">
                 <Filter className="text-box-400 h-5 w-5" />
-                <select
-                  value={selectedGroup}
-                  onChange={(e) => setSelectedGroup(e.target.value)}
-                  className="flex-1 sm:flex-none px-3 py-3 sm:py-2 border border-box-300 rounded-lg focus:ring-2 focus:ring-box-500 focus:border-transparent text-base bg-white"
-                >
-                  <option value="all">All Groups</option>
-                  {groups.map(group => (
-                    <option key={group} value={group}>{group}</option>
-                  ))}
-                </select>
+                <div className="flex-1 sm:flex-none">
+                  {!showNewGroupInput ? (
+                    <div className="flex gap-2">
+                      <select
+                        value={selectedGroup}
+                        onChange={(e) => setSelectedGroup(e.target.value)}
+                        className="flex-1 px-3 py-3 sm:py-2 border border-box-300 rounded-lg focus:ring-2 focus:ring-box-500 focus:border-transparent text-base bg-white"
+                      >
+                        <option value="all">All Groups</option>
+                        {groups.map(group => (
+                          <option key={group.id} value={group.name}>{group.name}</option>
+                        ))}
+                      </select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowNewGroupInput(true)}
+                        className="px-3 py-3 sm:py-2"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newGroupName}
+                        onChange={(e) => setNewGroupName(e.target.value)}
+                        placeholder="New group name"
+                        className="flex-1 px-3 py-3 sm:py-2 border border-box-300 rounded-lg focus:ring-2 focus:ring-box-500 focus:border-transparent text-base bg-white"
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleCreateGroup();
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        onClick={handleCreateGroup}
+                        className="px-3 py-3 sm:py-2"
+                      >
+                        ✓
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setShowNewGroupInput(false);
+                          setNewGroupName('');
+                        }}
+                        className="px-3 py-3 sm:py-2"
+                      >
+                        ✕
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* View Toggle */}
